@@ -61,7 +61,7 @@ start-vsock-proxy:
 	@$(MAKE) build-vsock-proxy
 	@echo "Starting vsock-proxy..."
 	@echo "VSOCK proxy is now running and streaming logs. Press Ctrl+C to stop."
-	@$(shell go env GOBIN)/vsock-proxy
+	@./bin/vsock-proxy
 
 start-connector:
 	@echo "=== Starting Connector ==="
@@ -69,7 +69,7 @@ start-connector:
 	@$(MAKE) build-connector
 	@echo "Starting connector..."
 	@echo "Connector is now running. Enter text to encrypt or type 'exit' to quit."
-	@$(shell go env GOBIN)/connector
+	@./bin/connector
 
 setup-vm: check-ports kill-qemu build-vm
 	@echo "=== Booting QEMU VM ==="
@@ -89,7 +89,7 @@ setup-vm: check-ports kill-qemu build-vm
 start-enclave: build-enclave
 	@echo "=== Starting Enclave in VM ==="
 	@echo "Copying enclave binary to VM..."
-	scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -P $(SSH_PORT) -i $(SSH_KEY) $(shell go env GOBIN)/enclave $(VM_USER)@localhost:/home/$(VM_USER)/
+	scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -P $(SSH_PORT) -i $(SSH_KEY) ./bin/enclave $(VM_USER)@localhost:/home/$(VM_USER)/
 	@echo "Starting enclave process..."
 	ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p $(SSH_PORT) -i $(SSH_KEY) $(VM_USER)@localhost "chmod +x /home/$(VM_USER)/enclave && nohup /home/$(VM_USER)/enclave > /home/$(VM_USER)/enclave.log 2>&1 &"
 	@echo "Enclave started! Use 'make view-logs' to see logs."
@@ -122,21 +122,24 @@ build-all: build-enclave build-connector build-vsock-proxy
 
 build-enclave:
 	@echo "Building enclave..."
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go install -a -ldflags '-extldflags "-static"' ./cmd/enclave
+	@mkdir -p ./bin
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ./bin/enclave -a -ldflags '-extldflags "-static"' ./cmd/enclave
 
 build-connector:
 	@echo "Building connector..."
-	go install ./cmd/connector
+	@mkdir -p ./bin
+	go build -o ./bin/connector ./cmd/connector
 
 build-vsock-proxy:
 	@echo "Building vsock-proxy..."
-	go install ./cmd/vsock-proxy
+	@mkdir -p ./bin
+	go build -o ./bin/vsock-proxy ./cmd/vsock-proxy
 
 show-bins:
-	@echo "Binaries installed at:"
-	@echo "  enclave: $(shell go env GOBIN)/enclave"
-	@echo "  connector: $(shell go env GOBIN)/connector"
-	@echo "  vsock-proxy: $(shell go env GOBIN)/vsock-proxy"
+	@echo "Binaries built at:"
+	@echo "  enclave: ./bin/enclave"
+	@echo "  connector: ./bin/connector"
+	@echo "  vsock-proxy: ./bin/vsock-proxy"
 
 ##############################################
 # SETUP AND UTILITY TARGETS
@@ -200,79 +203,18 @@ kill-all:
 	@-pkill -f "connector" || true
 	@-pkill -f "enclave" || true
 	
-	@echo "Killing processes using our ports..."
-	@echo "Checking SSH port $(SSH_PORT)..."
-	@-lsof -ti:$(SSH_PORT) | xargs -r kill -9 || true
-	@echo "Checking VSOCK port $(VSOCK_PORT)..."
-	@-lsof -ti:$(VSOCK_PORT) | xargs -r kill -9 || true
-	@echo "Checking KMS port $(KMS_PORT)..."
-	@-lsof -ti:$(KMS_PORT) | xargs -r kill -9 || true
-	@echo "Checking port 8000 (common vsock port)..."
-	@-lsof -ti:8000 | xargs -r kill -9 || true
-	
-	@echo "Killing any processes with our binary names..."
-	@-pgrep -f "vsock-proxy" | xargs -r kill -9 || true
-	@-pgrep -f "connector" | xargs -r kill -9 || true
-	@-pgrep -f "enclave" | xargs -r kill -9 || true
-	
-	@echo "Scanning for any other processes using common development ports..."
-	@for port in 8000 8001 8002 9000 9001 9002 2222 2223 4566 4567; do \
-		if lsof -i :$$port > /dev/null 2>&1; then \
-			echo "Found process on port $$port, killing..."; \
-			lsof -ti:$$port | xargs -r kill -9 || true; \
-		fi; \
-	done
-	
-	@echo "Waiting for processes to terminate..."
-	@sleep 3
-	
-	@echo "Force killing any remaining processes on our ports..."
-	@-fuser -k $(SSH_PORT)/tcp 2>/dev/null || true
-	@-fuser -k $(VSOCK_PORT)/tcp 2>/dev/null || true
-	@-fuser -k $(KMS_PORT)/tcp 2>/dev/null || true
+	@echo "Killing processes on known ports..."
+	@-fuser -k 2222/tcp 2>/dev/null || true
 	@-fuser -k 8000/tcp 2>/dev/null || true
+	@-fuser -k 9000/tcp 2>/dev/null || true
+	@-fuser -k 4566/tcp 2>/dev/null || true
 	
 	@echo "Removing temporary VM artifacts..."
 	-rm -f $(VM_IMG) $(SEED_IMG) user-data
-	-rm -f $(shell go env GOBIN)/enclave $(shell go env GOBIN)/connector $(shell go env GOBIN)/vsock-proxy 2>/dev/null || true
+	-rm -rf ./bin/
 	
-	@echo "Cleaning up any remaining temporary files..."
+	@echo "Cleaning up temporary files..."
 	-rm -f *.tmp *.log 2>/dev/null || true
 	-rm -rf vm-logs/ 2>/dev/null || true
-	
-	@echo "Checking for any remaining processes..."
-	@echo "Checking QEMU processes..."
-	@if pgrep -f "qemu" > /dev/null; then \
-		echo "Warning: Some QEMU processes may still be running. Use 'pkill -9 -f qemu' to force kill."; \
-	else \
-		echo "All QEMU processes terminated successfully."; \
-	fi
-	@echo "Checking Go application processes..."
-	@if pgrep -f "vsock-proxy\|connector\|enclave" > /dev/null; then \
-		echo "Warning: Some Go processes may still be running. Use 'pkill -9 -f vsock-proxy\|connector\|enclave' to force kill."; \
-	else \
-		echo "All Go application processes terminated successfully."; \
-	fi
-	@echo "Checking port usage..."
-	@if lsof -i :$(SSH_PORT) > /dev/null 2>&1; then \
-		echo "Warning: SSH port $(SSH_PORT) is still in use"; \
-	else \
-		echo "SSH port $(SSH_PORT) is free"; \
-	fi
-	@if lsof -i :$(VSOCK_PORT) > /dev/null 2>&1; then \
-		echo "Warning: VSOCK port $(VSOCK_PORT) is still in use"; \
-	else \
-		echo "VSOCK port $(VSOCK_PORT) is free"; \
-	fi
-	@if lsof -i :$(KMS_PORT) > /dev/null 2>&1; then \
-		echo "Warning: KMS port $(KMS_PORT) is still in use"; \
-	else \
-		echo "KMS port $(KMS_PORT) is free"; \
-	fi
-	@if lsof -i :8000 > /dev/null 2>&1; then \
-		echo "Warning: Port 8000 is still in use"; \
-	else \
-		echo "Port 8000 is free"; \
-	fi
 	
 	@echo "=== All development resources cleaned up ==="
