@@ -5,6 +5,7 @@ growpart:
   mode: auto
   devices: ['/']
   ignore_growroot_disabled: false
+
 users:
   - default
   - name: ubuntu
@@ -14,19 +15,105 @@ users:
     ssh-authorized-keys:
       - REPLACE_ME_WITH_YOUR_SSH_KEY
 
-
+# Minimal packages - only what's needed for VSOCK communication
 packages:
-  - golang
   - socat
 
+# Disable unnecessary services
+disable_root: true
+ssh_pwauth: false
+
+# Skip package updates and upgrades to save time and space
+package_update: false
+package_upgrade: false
+
 write_files:
-  - path: /etc/profile.d/golang.sh
+  # Systemd service for auto-restarting the enclave
+  - path: /etc/systemd/system/enclave.service
     content: |
-      export GOPATH=$HOME/go
-      export PATH=$PATH:/usr/local/go/bin:$GOPATH/bin
-    permissions: '0755'
+      [Unit]
+      Description=Nitro Enclave Service
+      After=network.target
+      Wants=network.target
+      
+      [Service]
+      Type=simple
+      User=ubuntu
+      WorkingDirectory=/home/ubuntu
+      ExecStart=/home/ubuntu/enclave
+      Restart=always
+      RestartSec=3
+      StandardOutput=journal
+      StandardError=journal
+      Environment=VSOCK_PORT=9000
+      
+      [Install]
+      WantedBy=multi-user.target
+    permissions: '0644'
+  
+  # Auto-login configuration
+  - path: /etc/systemd/system/getty@tty1.service.d/override.conf
+    content: |
+      [Service]
+      ExecStart=
+      ExecStart=-/sbin/agetty --autologin ubuntu --noclear %I $TERM
+    permissions: '0644'
+  
+  # Disable graphical boot
+  - path: /etc/default/grub
+    content: |
+      GRUB_DEFAULT=0
+      GRUB_TIMEOUT=0
+      GRUB_HIDDEN_TIMEOUT=0
+      GRUB_HIDDEN_TIMEOUT_QUIET=true
+      GRUB_TERMINAL=console
+      GRUB_CMDLINE_LINUX_DEFAULT="console=ttyS0,115200n8 console=tty0"
+      GRUB_CMDLINE_LINUX=""
+    permissions: '0644'
 
 runcmd:
-  - mkdir -p /home/ubuntu/go/src/app
-  - chown -R ubuntu:ubuntu /home/ubuntu/go
-  - echo "Cloud-init finished" > /var/log/cloud-init-done
+  # Create directory for enclave binary
+  - mkdir -p /home/ubuntu
+  - chown ubuntu:ubuntu /home/ubuntu
+  
+  # Disable unnecessary services for minimal footprint
+  - systemctl disable snapd || true
+  - systemctl disable cloud-init || true
+  - systemctl disable systemd-networkd-wait-online || true
+  - systemctl disable getty@tty2 || true
+  - systemctl disable getty@tty3 || true
+  - systemctl disable getty@tty4 || true
+  - systemctl disable getty@tty5 || true
+  - systemctl disable getty@tty6 || true
+  - systemctl disable apt-news || true
+  - systemctl disable esm-cache || true
+  - systemctl disable pollinate || true
+  - systemctl disable systemd-update-utmp-runlevel || true
+  - systemctl disable systemd-update-utmp || true
+  
+  # Enable auto-login and enclave service
+  - systemctl enable getty@tty1
+  - systemctl enable enclave
+  
+  # Clean up package cache and remove unnecessary files
+  - apt-get clean
+  - apt-get autoremove -y
+  - rm -rf /var/lib/apt/lists/*
+  - rm -rf /tmp/*
+  - rm -rf /var/tmp/*
+  
+  # Update GRUB for console boot
+  - update-grub
+  
+  # Create startup script
+  - echo '#!/bin/bash' > /home/ubuntu/startup.sh
+  - echo 'echo "Starting enclave service..."' >> /home/ubuntu/startup.sh
+  - echo 'systemctl start enclave' >> /home/ubuntu/startup.sh
+  - echo 'echo "Enclave service started. Logs available via: journalctl -u enclave -f"' >> /home/ubuntu/startup.sh
+  - chmod +x /home/ubuntu/startup.sh
+  - chown ubuntu:ubuntu /home/ubuntu/startup.sh
+  
+  # Add startup script to bashrc for auto-execution
+  - echo 'if [ -f /home/ubuntu/startup.sh ]; then /home/ubuntu/startup.sh; fi' >> /home/ubuntu/.bashrc
+  
+  - echo "Cloud-init finished - VM will auto-start enclave" > /var/log/cloud-init-done

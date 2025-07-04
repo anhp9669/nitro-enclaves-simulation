@@ -33,11 +33,13 @@ help:
 	@echo "VM Interaction:"
 	@echo "  make ssh-vm             # SSH into the VM"
 	@echo "  make view-logs          # View enclave logs in real-time"
+	@echo "  make enclave-status     # Check enclave service status"
 	@echo "  make get-logs           # Copy logs from VM to host"
 	@echo ""
 	@echo "Development:"
 	@echo "  make build-all          # Build all Go applications"
 	@echo "  make clean              # Clean up temporary files"
+	@echo "  make clean-all          # Remove all built files, OS images, and generated files"
 	@echo "  make kill-all           # Stop all services and clean up"
 	@echo ""
 
@@ -73,6 +75,7 @@ start-connector:
 setup-vm: check-ports kill-qemu build-vm
 	@echo "=== Booting QEMU VM ==="
 	@echo "Starting VM with cloud-init and vsock..."
+	@echo "VM will boot directly to console and auto-start enclave service"
 	qemu-system-x86_64 \
 	  -m $(VM_MEM) \
 	  -smp $(VM_CPUS) \
@@ -83,15 +86,16 @@ setup-vm: check-ports kill-qemu build-vm
 	  -netdev user,id=net0,hostfwd=tcp::$(SSH_PORT)-:22,hostfwd=tcp::$(VSOCK_PORT)-:$(VSOCK_PORT) \
 	  -device virtio-net-pci,netdev=net0 \
 	  -device vhost-vsock-pci,guest-cid=$(VSOCK_CID) \
-	  -nographic
+	  -nographic \
+	  -serial mon:stdio
 
 start-enclave: build-enclave
 	@echo "=== Starting Enclave in VM ==="
 	@echo "Copying enclave binary to VM..."
 	scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -P $(SSH_PORT) -i $(SSH_KEY) ./bin/enclave $(VM_USER)@localhost:/home/$(VM_USER)/
-	@echo "Starting enclave process..."
-	ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p $(SSH_PORT) -i $(SSH_KEY) $(VM_USER)@localhost "chmod +x /home/$(VM_USER)/enclave && nohup /home/$(VM_USER)/enclave > /home/$(VM_USER)/enclave.log 2>&1 &"
-	@echo "Enclave started! Use 'make view-logs' to see logs."
+	@echo "Restarting enclave service..."
+	ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p $(SSH_PORT) -i $(SSH_KEY) $(VM_USER)@localhost "chmod +x /home/$(VM_USER)/enclave && sudo systemctl restart enclave"
+	@echo "Enclave service started with auto-restart! Use 'make view-logs' to see logs."
 
 ##############################################
 # VM INTERACTION TARGETS
@@ -103,8 +107,12 @@ ssh-vm:
 
 view-logs:
 	@echo "=== Viewing Enclave Logs ==="
-	@echo "Tailing enclave logs from VM (Ctrl+C to stop)..."
-	ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p $(SSH_PORT) -i $(SSH_KEY) $(VM_USER)@localhost "tail -f /home/$(VM_USER)/enclave.log"
+	@echo "Tailing enclave service logs from VM (Ctrl+C to stop)..."
+	ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p $(SSH_PORT) -i $(SSH_KEY) $(VM_USER)@localhost "sudo journalctl -u enclave -f"
+
+enclave-status:
+	@echo "=== Enclave Service Status ==="
+	ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p $(SSH_PORT) -i $(SSH_KEY) $(VM_USER)@localhost "sudo systemctl status enclave"
 
 get-logs:
 	@echo "=== Copying Logs from VM ==="
@@ -186,9 +194,33 @@ create-vm:
 # CLEANUP TARGETS
 ##############################################
 
-clean:
-	@echo "Cleaning up temporary files..."
-	rm -f $(SEED_IMG) user-data
+
+clean-all:
+	@echo "=== Complete Cleanup - Removing All Generated Files ==="
+	
+	@echo "1. Removing all Go built binaries..."
+	-rm -rf ./bin/
+	
+	@echo "2. Removing all OS images..."
+	-rm -f $(VM_IMG)
+	-rm -f $(BASE_IMG)
+	-rm -f $(SEED_IMG)
+	-rm -f user-data
+	
+	@echo "3. Removing other generated files..."
+	-rm -f *.tmp *.log 2>/dev/null || true
+	-rm -rf vm-logs/ 2>/dev/null || true
+	-rm -f *.qcow2 2>/dev/null || true
+	-rm -f *.img 2>/dev/null || true
+	
+	@echo "4. Cleaning Go cache..."
+	-go clean -cache -modcache -testcache 2>/dev/null || true
+	
+	@echo "5. Removing any remaining temporary files..."
+	-find . -name "*.tmp" -delete 2>/dev/null || true
+	-find . -name "*.log" -delete 2>/dev/null || true
+	
+	@echo "=== Complete cleanup finished ==="
 
 kill-all:
 	@echo "=== Stopping all development services ==="
