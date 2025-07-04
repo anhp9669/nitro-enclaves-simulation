@@ -2,13 +2,32 @@
 
 A complete development environment for experimenting with AWS Nitro Enclaves using QEMU VM simulation. This project provides a local development setup that mimics the Nitro Enclave environment, allowing you to develop, test, and debug enclave applications without needing actual AWS hardware.
 
+## 🛡️ Nitro Enclave Use Cases
+
+AWS Nitro Enclaves provide a secure, isolated compute environment for highly sensitive data and workloads. Here are some of the most common and impactful use cases:
+
+- **Trusted Execution Environment (TEE):** Run code in a hardware-isolated environment, protecting against host OS and hypervisor attacks.
+- **Processing Personally Identifiable Information (PII):** Securely process, analyze, or transform sensitive user data (e.g., healthcare, finance, government).
+- **Embedded Wallet Infrastructure:** Store and use private keys for cryptocurrency wallets in a way that keys never leave the enclave.
+- **Multi-Party Computation (MPC) Wallet Infrastructure:** Run MPC protocols for digital asset custody, ensuring key shares are never exposed outside the enclave.
+- **Payment and Transaction Signing:** Sign blockchain or financial transactions securely, with private keys protected by the enclave.
+- **Confidential Machine Learning:** Run ML inference or training on sensitive data without exposing the data to the host or cloud provider.
+- **Secure API Gateways:** Decrypt, process, and re-encrypt sensitive API payloads (e.g., payment info, health records) in a trusted environment.
+- **Data Decryption and Re-encryption:** Decrypt data for processing and re-encrypt before storage or transmission, with keys only accessible inside the enclave.
+- **Digital Rights Management (DRM):** Enforce DRM policies and process protected content securely.
+- **Attestation and Remote Proof:** Prove to external parties that code is running in a genuine enclave and has not been tampered with.
+- **Secure Credential Brokering:** Issue short-lived credentials or tokens after verifying policies inside the enclave.
+- **Confidential Data Aggregation:** Aggregate sensitive data from multiple sources without exposing raw data to any party.
+- **Regulatory Compliance:** Meet requirements for data residency, privacy, and auditability by isolating sensitive workloads.
+- **Secure Voting and Polling:** Run cryptographically secure voting or polling applications.
+- **Secure Document Processing:** Process, sign, or watermark documents in a tamper-proof environment.
+- **Custom Hardware Security Module (HSM) Replacement:** Use enclaves as a software-based HSM for key management and cryptographic operations.
+
+These use cases demonstrate the versatility of Nitro Enclaves for any scenario requiring strong isolation, confidentiality, and integrity guarantees for code and data.
+
 ## 🚀 Quick Start
 
 ```bash
-# Clone the repository
-git clone <your-repo-url>
-cd nitro-dev-qemu
-
 # Start the complete environment (order matters!)
 make setup-vm           # Boot the QEMU VM first
 # ⚠️  IMPORTANT: Wait for VM to fully boot before continuing!
@@ -47,9 +66,6 @@ wget https://go.dev/dl/go1.21.0.linux-amd64.tar.gz
 sudo tar -C /usr/local -xzf go1.21.0.linux-amd64.tar.gz
 echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
 source ~/.bashrc
-
-# Install Python 3 (for port detection)
-sudo apt install -y python3
 ```
 
 ### SSH Key Setup
@@ -301,15 +317,6 @@ nitro-dev-qemu/
 └── README.md            # This file
 ```
 
-## 🔒 Security Notes
-
-⚠️ **Important**: This is a development environment for learning and testing. It does not provide the same security guarantees as real AWS Nitro Enclaves.
-
-- The VM is not isolated like real enclaves
-- KMS keys are stored locally
-- Network communication is simulated
-- Use only for development and testing
-
 ## 🧪 Experimentation Ideas
 
 1. **Basic Enclave Communication**: Modify the enclave and connector to exchange encrypted messages
@@ -343,18 +350,6 @@ SSH_PORT=2222      # SSH access port
 - [QEMU Documentation](https://qemu.readthedocs.io/)
 - [LocalStack Documentation](https://docs.localstack.cloud/)
 - [Go Programming Language](https://golang.org/)
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
-
-## 📄 License
-
-[Add your license information here]
 
 ---
 
