@@ -211,6 +211,17 @@ kill-all:
 	@-fuser -k 9000/tcp 2>/dev/null || true
 	@-fuser -k 4566/tcp 2>/dev/null || true
 	
+	@echo "Force cleaning up VSOCK bindings..."
+	@-rmmod vhost_vsock 2>/dev/null || true
+	@-rmmod vmw_vsock_virtio_transport_common 2>/dev/null || true
+	@-rmmod vmw_vsock_virtio_transport 2>/dev/null || true
+	@-rmmod vsock 2>/dev/null || true
+	@echo "Reloading VSOCK kernel modules..."
+	@-modprobe vsock 2>/dev/null || true
+	@-modprobe vmw_vsock_virtio_transport 2>/dev/null || true
+	@-modprobe vmw_vsock_virtio_transport_common 2>/dev/null || true
+	@-modprobe vhost_vsock 2>/dev/null || true
+	
 	@echo "Removing temporary VM artifacts..."
 	-rm -f $(VM_IMG) $(SEED_IMG) user-data
 	-rm -rf ./bin/
