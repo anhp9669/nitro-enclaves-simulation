@@ -1,0 +1,14 @@
+services:
+  localstack:
+    image: localstack/localstack:latest
+    container_name: localstack
+    environment:
+      - SERVICES=kms
+      - DEBUG=1
+      - AWS_DEFAULT_REGION=us-east-1
+      - EDGE_PORT=4566
+    ports:
+      - "4566:4566" # LocalStack main port
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "./kms-test-policy.json:/etc/localstack/kms-test-policy.json"

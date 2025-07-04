@@ -1,0 +1,12 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "Allow all for dev testing",
+      "Effect": "Allow",
+      "Principal": { "AWS": "*" },
+      "Action": "kms:*",
+      "Resource": "*"
+    }
+  ]
+}
