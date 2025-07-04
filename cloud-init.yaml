@@ -16,12 +16,7 @@ users:
 
 
 packages:
-  - git
   - golang
-  - awscli
-  - unzip
-  - curl
-  - net-tools
   - socat
 
 write_files:

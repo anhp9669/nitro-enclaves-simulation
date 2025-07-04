@@ -9,6 +9,7 @@ SEED_IMG=seed.img
 VM_MEM=1024
 VM_CPUS=2
 VSOCK_PORT=9000
+VSOCK_PROXY_PORT=8000
 VSOCK_CID=3
 SSH_PORT=2222
 KMS_PORT=4566
@@ -16,8 +17,6 @@ VM_USER=ubuntu
 SSH_KEY=~/.ssh/dev-vm
 SSH_PUB_KEY=~/.ssh/dev-vm.pub
 
-# Helper function to find available port
-find_available_port = $(shell python3 -c "import socket; s=socket.socket(); s.bind(('', 0)); print(s.getsockname()[1]); s.close()")
 
 .PHONY: help all start-vsock-proxy start-connector setup-vm start-enclave ssh-vm view-logs get-logs build-all clean kill-all
 
@@ -61,7 +60,7 @@ start-vsock-proxy:
 	@$(MAKE) build-vsock-proxy
 	@echo "Starting vsock-proxy..."
 	@echo "VSOCK proxy is now running and streaming logs. Press Ctrl+C to stop."
-	@./bin/vsock-proxy
+	@VSOCK_PORT=$(VSOCK_PROXY_PORT) ./bin/vsock-proxy
 
 start-connector:
 	@echo "=== Starting Connector ==="
@@ -157,6 +156,9 @@ check-ports:
 	fi
 	@if lsof -i :$(VSOCK_PORT) > /dev/null 2>&1; then \
 		echo "Warning: VSOCK port $(VSOCK_PORT) is already in use"; \
+	fi
+	@if lsof -i :$(VSOCK_PROXY_PORT) > /dev/null 2>&1; then \
+		echo "Warning: VSOCK proxy port $(VSOCK_PROXY_PORT) is already in use"; \
 	fi
 
 kill-qemu:

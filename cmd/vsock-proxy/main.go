@@ -55,12 +55,12 @@ func main() {
 		log.Println("[vsock-proxy] KMS configuration verified successfully")
 	}
 
-	// Create vsock listener on CID 2, port 9000 (use VSOCK_PORT from env or default)
-	vsockPort := 9000
+	// Create vsock listener on CID 2, port 8000 (use VSOCK_PORT from env or default)
+	vsockPort := 8000
 	if port := os.Getenv("VSOCK_PORT"); port != "" {
 		if p, err := fmt.Sscanf(port, "%d", &vsockPort); err != nil || p != 1 {
-			log.Printf("[vsock-proxy] Invalid VSOCK_PORT %s, using default 9000", port)
-			vsockPort = 9000
+			log.Printf("[vsock-proxy] Invalid VSOCK_PORT %s, using default 8000", port)
+			vsockPort = 8000
 		}
 	}
 
