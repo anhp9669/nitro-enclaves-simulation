@@ -69,11 +69,12 @@ func main() {
 
 func handleVsockConnection(fd int, sa unix.Sockaddr, connID int) {
 	startTime := time.Now()
-	log.Printf("[enclave:%d] Starting connection handler", connID)
+	log.Printf("[enclave:%d] ===== NEW CONNECTION HANDLER =====", connID)
 	defer func() {
 		unix.Close(fd)
 		duration := time.Since(startTime)
 		log.Printf("[enclave:%d] Connection closed after %v", connID, duration)
+		log.Printf("[enclave:%d] ===== END CONNECTION HANDLER =====", connID)
 	}()
 
 	// Read data from connector
@@ -88,7 +89,10 @@ func handleVsockConnection(fd int, sa unix.Sockaddr, connID int) {
 	readTime := time.Since(readStart)
 
 	plaintext := string(buffer[:n])
-	log.Printf("[enclave:%d] Received %d bytes in %v: %q", connID, n, readTime, plaintext)
+	log.Printf("[enclave:%d] Received %d bytes in %v", connID, n, readTime)
+	log.Printf("[enclave:%d] PLAINTEXT FROM CONNECTOR: %q", connID, plaintext)
+	log.Printf("[enclave:%d] Plaintext length: %d characters", connID, len(plaintext))
+	log.Printf("[enclave:%d] Plaintext bytes: %v", connID, []byte(plaintext))
 
 	// Forward to vsock-proxy for KMS encryption
 	log.Printf("[enclave:%d] Forwarding to vsock-proxy for KMS encryption...", connID)
@@ -103,6 +107,11 @@ func handleVsockConnection(fd int, sa unix.Sockaddr, connID int) {
 
 	// Send encrypted result back to connector
 	log.Printf("[enclave:%d] Sending encrypted result (%d bytes) to connector...", connID, len(encrypted))
+	log.Printf("[enclave:%d] ENCRYPTED RESULT TO CONNECTOR: %q", connID, encrypted)
+	log.Printf("[enclave:%d] Encrypted length: %d characters", connID, len(encrypted))
+	log.Printf("[enclave:%d] Encrypted bytes: %v", connID, []byte(encrypted))
+	log.Printf("[enclave:%d] Encryption ratio: %.2f (encrypted/plaintext)", connID, float64(len(encrypted))/float64(len(plaintext)))
+
 	sendStart := time.Now()
 	_, err = unix.Write(fd, []byte(encrypted))
 	if err != nil {
@@ -113,7 +122,13 @@ func handleVsockConnection(fd int, sa unix.Sockaddr, connID int) {
 
 	totalTime := time.Since(startTime)
 	log.Printf("[enclave:%d] Response sent in %v (total processing: %v)", connID, sendTime, totalTime)
-	log.Printf("[enclave:%d] Encrypted result: %q", connID, encrypted)
+	log.Printf("[enclave:%d] ===== ENCRYPTION SUMMARY =====", connID)
+	log.Printf("[enclave:%d] Plaintext: %q", connID, plaintext)
+	log.Printf("[enclave:%d] Encrypted: %q", connID, encrypted)
+	log.Printf("[enclave:%d] Plaintext length: %d chars", connID, len(plaintext))
+	log.Printf("[enclave:%d] Encrypted length: %d chars", connID, len(encrypted))
+	log.Printf("[enclave:%d] Total processing time: %v", connID, totalTime)
+	log.Printf("[enclave:%d] ===== END ENCRYPTION SUMMARY =====", connID)
 }
 
 func forwardToVsockProxy(plaintext string) (string, error) {
@@ -139,6 +154,7 @@ func forwardToVsockProxy(plaintext string) (string, error) {
 	log.Printf("[enclave] Connected to vsock-proxy")
 
 	// Send plaintext to vsock-proxy
+	log.Printf("[enclave] Sending plaintext to vsock-proxy: %q", plaintext)
 	_, err = unix.Write(proxyFd, []byte(plaintext))
 	if err != nil {
 		return "", err
@@ -151,7 +167,10 @@ func forwardToVsockProxy(plaintext string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	log.Printf("[enclave] Received encrypted result from vsock-proxy")
 
-	return string(reply[:n]), nil
+	encryptedResult := string(reply[:n])
+	log.Printf("[enclave] Received encrypted result from vsock-proxy: %q", encryptedResult)
+	log.Printf("[enclave] Encrypted result length: %d characters", len(encryptedResult))
+
+	return encryptedResult, nil
 }

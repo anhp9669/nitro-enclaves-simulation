@@ -1,1 +1,4 @@
 *.img
+*.qcow2
+*.tar.gz
+user-data

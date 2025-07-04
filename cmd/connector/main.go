@@ -24,6 +24,16 @@ func main() {
 			break
 		}
 
+		// Trim newline and send to enclave
+		if len(text) > 0 {
+			text = text[:len(text)-1] // Remove trailing newline
+		}
+
+		log.Printf("[connector] ===== NEW ENCRYPTION REQUEST =====")
+		log.Printf("[connector] PLAINTEXT INPUT: %q", text)
+		log.Printf("[connector] Plaintext length: %d characters", len(text))
+		log.Printf("[connector] Plaintext bytes: %v", []byte(text))
+
 		log.Printf("[connector] Attempting to connect to enclave...")
 		startTime := time.Now()
 
@@ -52,7 +62,8 @@ func main() {
 		log.Printf("[connector] Successfully connected to enclave in %v", connectTime)
 
 		// Send data
-		log.Printf("[connector] Sending %d bytes: %q", len(text), text[:len(text)-1]) // Remove newline from log
+		log.Printf("[connector] Sending %d bytes to enclave", len(text))
+		log.Printf("[connector] SENDING PLAINTEXT: %q", text)
 		sendStart := time.Now()
 		_, err = unix.Write(fd, []byte(text))
 		if err != nil {
@@ -64,7 +75,7 @@ func main() {
 		log.Printf("[connector] Data sent successfully in %v", sendTime)
 
 		// Read response
-		log.Printf("[connector] Waiting for encrypted response...")
+		log.Printf("[connector] Waiting for encrypted response from enclave...")
 		readStart := time.Now()
 		reply := make([]byte, 4096)
 		n, err := unix.Read(fd, reply)
@@ -79,10 +90,22 @@ func main() {
 		log.Printf("[connector] Received %d bytes in %v (total round-trip: %v)", n, readTime, totalTime)
 
 		encryptedResult := string(reply[:n])
-		log.Printf("[connector] Raw encrypted result: %q", encryptedResult)
-		fmt.Println("Encrypted result:", encryptedResult)
+		log.Printf("[connector] ===== ENCRYPTION RESULT =====")
+		log.Printf("[connector] ENCRYPTED RESULT: %q", encryptedResult)
+		log.Printf("[connector] Encrypted length: %d characters", len(encryptedResult))
+		log.Printf("[connector] Encrypted bytes: %v", []byte(encryptedResult))
+		log.Printf("[connector] Encryption ratio: %.2f (encrypted/plaintext)", float64(len(encryptedResult))/float64(len(text)))
+
+		fmt.Println("=== ENCRYPTION SUMMARY ===")
+		fmt.Printf("Plaintext: %q\n", text)
+		fmt.Printf("Encrypted: %q\n", encryptedResult)
+		fmt.Printf("Plaintext length: %d chars\n", len(text))
+		fmt.Printf("Encrypted length: %d chars\n", len(encryptedResult))
+		fmt.Printf("Total round-trip time: %v\n", totalTime)
+		fmt.Println("==========================")
 
 		unix.Close(fd)
 		log.Printf("[connector] Connection closed")
+		log.Printf("[connector] ===== END ENCRYPTION REQUEST =====")
 	}
 }
